@@ -1,0 +1,460 @@
+---
+title: "bankMarketingExploratory"
+output:
+  html_document: default
+  pdf_document: default
+date: '2022-07-28'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dplyr)
+library(caret)
+library(inspectdf)
+library(tictoc)
+library(MLmetrics)
+library(DALEX)
+library(DMwR)
+library(xgboost)
+library(randomForest)
+library(vcd) #for mosaic plots
+library(forcats)
+library(GGally)
+library(corrplot)
+```
+
+
+
+
+
+```{r}
+df = read.csv('../data/bank-additional-full.csv',sep = ';',stringsAsFactors=TRUE) #trying to override default behavior since need factors for SMOTE
+```
+```{r}
+dfK = read.csv('../data/bankKaggle.csv',sep = ',',stringsAsFactors=TRUE)
+```
+```{r}
+head(df)
+```
+NOTE: *duration* is a leaked variable that should not be used since it was not known before the call was made!!!
+```{r}
+df$duration <- NULL
+df$emp.var.rate <-NULL
+df$cons.conf.idx <-NULL
+#df$euribor3m <-NULL
+df$nr.employed <-NULL
+
+```
+
+
+```{r}
+df<- df %>% rename(deposit = y)
+
+df$deposit=factor(df$deposit,levels=c('yes','no'))
+
+```
+
+```{r}
+dfK$duration <- NULL
+```
+
+
+
+```{r}
+head(dfK)
+```
+
+
+```{r}
+x <- inspect_na(df)
+show_plot(x)
+```
+
+```{r}
+x <- inspect_num(df)
+show_plot(x)
+```
+```{r}
+prop.table(table(df$y))
+```
+
+
+
+
+
+
+```{r}
+#reduced_general <-df %>%select(job,marital,education)
+reduced_general <- df[,2:4]
+mosaicplot(reduced_general, shade = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+================================================================================
+
+# Split into train, validation, and test sets
+```{r}
+set.seed(42)
+trainIdx <- createDataPartition(df$deposit,p=0.8,list=FALSE)#90% for trainining, list = FALSE to avoid Error in xj[i] : invalid subscript type 'list'
+dfTrain <- df[trainIdx,]
+validTest<- df[-trainIdx,]
+
+#For SMOTE, must convert to factor
+dfTrain$deposit = as.factor(dfTrain$deposit)
+
+#partition half of the 20% into validation and test sets
+testIdx <- createDataPartition(validTest$deposit,p=.5,list=FALSE)
+dfValid <- validTest[-testIdx,]
+dfTest <- validTest[testIdx,]
+```
+
+
+```{r}
+#NOTE: I DON'T THINK I CAN MEANINGFULLY COMPARE THE MODEL FITTED ON 20 VARS WITH KAGGLE'S 17 ONE
+set.seed(42)
+trainIdxK <- createDataPartition(dfK$deposit,p=0.8,list=FALSE)#90% for trainining, list = FALSE to avoid Error in xj[i] : invalid subscript type 'list'
+dfTrainK <- dfK[trainIdxK,]
+validTestK<- dfK[-trainIdxK,]
+
+#For SMOTE, must convert to factor
+dfTrainK$deposit = as.factor(dfTrainK$deposit)
+
+#partition half of the 20% into validation and test sets
+testIdxK <- createDataPartition(validTestK$deposit,p=.5,list=FALSE)
+dfValidK <- validTestK[-testIdxK,]
+dfTestK <- validTestK[testIdxK,]
+```
+
+
+
+
+
+
+
+
+
+================================================================================
+#FINAL MODEL
+#Try adjusting the weights manually with euribor3m: Sensitivity : 0.59483  -> Improvement!
+The final values used for the model were mtry = 12, splitrule = extratrees and min.node.size
+ = 40.
+          Reference
+Prediction  yes   no
+       yes  276  428
+       no   188 3226
+                       
+```{r}
+tuneGrid <- expand.grid(mtry = c(12,16), 
+                        splitrule = c("extratrees"),
+                        min.node.size = c(10,20,30,40))
+myFolds_full <- createFolds(dfTrain$deposit, k = 10)
+trainControl <- trainControl(# Compute Recall, Precision, F-Measure
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE,
+  verboseIter = TRUE,
+  savePredictions = TRUE,
+  index = myFolds_full)
+
+
+model_weights <- ifelse(dfTrain$deposit == "yes",
+                        (1/table(dfTrain$deposit)[1]) * 0.5,
+                        (1/table(dfTrain$deposit)[2]) * 0.5)
+
+modelFit_weights <- train(deposit ~ . , 
+                                data = dfTrain, 
+                                method = "ranger", 
+                                trControl = trainControl,
+                                tuneGrid = tuneGrid,
+                                metric = "ROC",
+                                maximize = TRUE,
+                                weights = model_weights)
+```
+
+
+
+```{r}
+pred_rf_raw_sm <- predict.train(modelFit_weights,
+                          newdata = dfValid,
+                          type = "raw")
+pred_rf_rec_sm <- predict.train(modelFit_weights,
+                          newdata = dfValid,
+                          type = "prob")
+
+```
+
+
+```{r}
+confusionMatrix(data = pred_rf_raw_sm,
+                factor(dfValid$deposit),
+                positive = "yes")
+```
+```{r}
+pred_rf_raw_sm_test <- predict.train(modelFit_weights,
+                          newdata = dfTest,
+                          type = "raw")
+pred_rf_rec_sm_test <- predict.train(modelFit_weights,
+                          newdata = dfTest,
+                          type = "prob")
+
+```
+```{r}
+confusionMatrix(data = pred_rf_raw_sm_test,
+                factor(dfTest$deposit),
+                positive = "yes")
+```
+
+
+```{r}
+modelFit_weights
+```
+
+
+
+```{r}
+saveRDS(modelFit_weights, "modelFit_weights.rds")
+```
+
+```{r}
+exp2 <- readRDS("modelFit_weights.rds")
+```
+
+```{r}
+print(exp2)
+```
+
+
+```{r}
+roc.plot(df$yes, gfgData$no)
+```
+
+```{r}
+model<-modelFit_weights
+```
+
+```{r}
+#Source: https://www.r-bloggers.com/2021/07/feature-importance-in-random-forest/
+
+
+#Conditional=True, adjusts for correlations between predictors.
+i_scores <- varImp(model_rf, conditional=TRUE)
+#Gathering rownames in 'var'  and converting it to the factor
+#to provide 'fill' parameter for the bar chart. 
+i_scores <- i_scores %>% tibble::rownames_to_column("deposit") 
+i_scores$var<- i_scores$var %>% as.factor()
+#Plotting the bar and polar charts for comparing variables
+i_bar <- ggplot(data = i_scores) + 
+  geom_bar(
+    stat = "identity",#it leaves the data without count and bin
+    mapping = aes(x = var, y=Overall, fill = var), 
+    show.legend = FALSE,
+    width = 1
+  ) + 
+  labs(x = NULL, y = NULL)
+i_bar + coord_polar() + theme_minimal()
+i_bar + coord_flip() + theme_minimal()
+```
+
+```{r}
+importance(model)
+```
+
+```{r}
+caret::varImp(model)$importance
+```
+================================================================================
+#FINAL MODEL retrain for importance
+#Try adjusting the weights manually with euribor3m: Sensitivity : 0.59483  -> Improvement!
+The final values used for the model were mtry = 12, splitrule = extratrees and min.node.size
+ = 40.
+          Reference
+Prediction  yes   no
+       yes  276  428
+       no   188 3226
+                       
+```{r}
+tuneGrid <- expand.grid(mtry = c(12), 
+                        splitrule = c("extratrees"),
+                        min.node.size = c(40))
+myFolds_full <- createFolds(dfTrain$deposit, k = 10)
+trainControl <- trainControl(# Compute Recall, Precision, F-Measure
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE,
+  verboseIter = TRUE,
+  savePredictions = TRUE,
+  index = myFolds_full)
+
+
+model_weights <- ifelse(dfTrain$deposit == "yes",
+                        (1/table(dfTrain$deposit)[1]) * 0.5,
+                        (1/table(dfTrain$deposit)[2]) * 0.5)
+
+model_rf <- train(deposit ~ . , 
+                                data = dfTrain, 
+                                method = "ranger", 
+                                trControl = trainControl,
+                                tuneGrid = tuneGrid,
+                                metric = "ROC",
+                                maximize = TRUE,
+                                weights = model_weights,
+                                importance = "impurity")
+```
+```{r}
+pred_rf_raw_imp <- predict.train(model_rf,
+                          newdata = dfValid,
+                          type = "raw")
+pred_rf_rec_imp <- predict.train(model_rf,
+                          newdata = dfValid,
+                          type = "prob")
+
+```
+
+
+```{r}
+confusionMatrix(data = pred_rf_raw_imp,
+                factor(dfValid$deposit),
+                positive = "yes")
+```
+```{r}
+caret::varImp(model_rf)$importance
+nrow(varImp(model_rf)$importance) #34 variables extracted
+
+```
+```{r}
+varImp(model_rf)$importance %>% 
+  as.data.frame() %>%
+  tibble::rownames_to_column() %>%
+  arrange(Overall) %>%
+  mutate(rowname = forcats::fct_inorder(rowname )) %>%
+  ggplot()+
+    geom_col(aes(x = rowname, y = Overall))+
+    coord_flip()+
+    theme_bw()+
+    geom_density(
+      aes(x = rowname, y = Overall),
+    color="purple",
+    fill="#69b3a2",
+    size=2
+   )
+
+
+```
+```{r}
+varImp(model_rf)$importance %>% 
+  as.data.frame() %>%
+  tibble::rownames_to_column() %>%
+  arrange(Overall) %>%
+  mutate(rowname = forcats::fct_inorder(rowname )) %>%
+  ggplot()+
+    geom_col(aes(x = rowname, y = Overall),col="#E5F5F9" ,fill="#99D8C9")+
+    coord_flip()+
+    theme_bw()
+
+
+```
+```{r}
+varImp(model_rf)$importance %>% 
+   top_n(15, Overall) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column() %>%
+  arrange(Overall) %>%
+  mutate(rowname = forcats::fct_inorder(rowname )) %>%
+ 
+  ggplot()+
+    geom_col(aes(x = rowname, y = Overall),col="#E5F5F9" ,fill="#99D8C9")+
+    coord_flip()+
+    theme_bw()+
+    ggtitle("Most Important Features (top 15)")+
+  theme(plot.title = element_text(hjust = 0.5))
+    
+```
+
+
+```{r}
+GGally::ggcorr(df, method = c("everything", "pearson"))#,ggplot2::aes(colour=deposit)) 
+```
+```{r}
+GGally::ggcorr(df, method = c("everything", "pearson"),ggplot2::aes(colour=deposit)) 
+```
+```{r}
+corrplot::corrplot(df[,11:13], tl.col = "red", bg = "White", tl.srt = 35, 
+         title = "\n\n Correlation Plot Of Gambling Data \n",
+         addCoef.col = "black", type = "full")
+```
+```{r}
+corrplot(cor(dplyr::select_if(df, is.numeric)), method = 'number') # colorful number
+```
+
+```{r}
+GGally::ggcorr(df, columns=11:13,ggplot2::aes(colour=deposit)) 
+```
+
+
+```{r}
+library(inspectdf)
+x<-inspectdf::inspect_cat(df)  
+show_plot(x)+
+  theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+#show_plot(as.numeric(unlist(x)))
+
+
+```
+
+
+```{r}
+ggplot(df, aes(age, fill = deposit)) +
+  geom_density(alpha = 0.5) +
+  theme_bw()
+```
+```{r}
+ggplot(df, aes(euribor3m, fill = deposit)) +
+  geom_density(alpha = 0.5) +
+  theme_bw()+
+    ggtitle("Euribor 3 Month Rate  Vs Deposits ")+
+  theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+```
+```{r}
+ggplot(df, aes(pdays, fill = deposit)) +
+  geom_density(alpha = 0.5) +
+  theme_bw()+
+    ggtitle("Number of Contacts Performed Before This Campaign  Vs Deposits ")+
+  theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r}
+ggplot(df, aes(campaign, fill = deposit)) +
+  geom_density(alpha = 0.5) +
+  theme_bw()+
+    ggtitle("Number of Contacts Performed Before This Campaign  Vs Deposits ")+
+  theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+```
+
+
+
+```{r}
+y<-inspect_cor(df[-16])#, show_plot = TRUE)
+show_plot(y)+
+  theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+```
+
