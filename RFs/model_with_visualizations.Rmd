@@ -133,6 +133,14 @@ mosaicplot(table(housing_vs_deposit), shade = TRUE)
 month_vs_deposit <- df[,c(9,20)]
 mosaicplot(table(month_vs_deposit ), shade = TRUE,color=TRUE)
 ```
+
+```{r}
+#reduced_general <-df %>%select(job,marital,education)
+housing_vs_deposit <- df[,c(6,20)]
+mosaicplot(table(housing_vs_deposit ), shade = TRUE,color=TRUE)
+```
+
+
 ```{r}
 df%>% 
   group_by(month,deposit)%>%
@@ -213,7 +221,8 @@ Prediction  yes   no
 ```{r}
 #Special thanks to Rodrigo Barrios for useful suggestions on imbalanced training with caret and ranger on a different dataset
 #https://www.kaggle.com/code/rowang/smote-for-imbalanced-dataset-notebook-r-caret/notebook
-#In my case, the simplest approach worked better than Smote
+#In my case, this approach worked better than Smote or gradient boosting. Finding the maximum ROC also
+#yielded better results than maximizing metrics such as F1 score, recall, sensitivity, or specificity.
 tuneGrid <- expand.grid(mtry = c(12,16), 
                         splitrule = c("extratrees"),
                         min.node.size = c(10,20,30,40))
@@ -265,7 +274,7 @@ Slightly better performance on the test set.  In the long term, would be helpful
 pred_rf_raw_test <- predict.train(model,
                           newdata = dfTest,
                           type = "raw")
-pred_rf_rec_test <- predict.train(model,
+pred_rf_prob_test <- predict.train(model,
                           newdata = dfTest,
                           type = "prob")
 
@@ -276,6 +285,9 @@ confusionMatrix(data = pred_rf_raw_test,
                 positive = "yes")
 
 ```
+
+
+
 ```{r}
 #Would be better to use the validation set for this, but the test set has a distribution of nos and yeses more similar to
 #training set
@@ -310,10 +322,7 @@ plot(sens.ci, type="bars")
 AUC of .754 is within good (but not excellent) discrimination range.
 
 
-```{r}
-rocTable <- roctable(trueTest,predTest)
-head(rocTable)
-```
+
 
 ```{r}
 model
@@ -332,6 +341,46 @@ exp2 <- readRDS("model2.rds")
 ```{r}
 print(exp2)
 ```
+
+
+
+#Cutoffs experiments
+```{r}
+joined=data.frame(as.numeric(unlist(pred_rf_prob_test[1])),pred_rf_raw_test,dfTest$deposit) #1 is col of yeses
+```
+
+```{r}
+joined<-joined %>% rename(probs=as.numeric.unlist.pred_rf_prob_test.1...,preds=pred_rf_raw_test,actual=dfTest.deposit)
+```
+
+```{r}
+#Would be better to use the validation set for this, but the test set has a distribution of nos and yeses more similar to
+#training set
+predExperiment<-ifelse(joined$probs>.30,1,0)
+trueExperiment<-ifelse(joined$actual=='yes',1,0)
+```
+
+
+```{r}
+confusionMatrix(data = factor(predExperiment),
+                factor(trueExperiment),
+                positive = '1')
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -358,7 +407,7 @@ varImp(model)$importance %>%
       aes(x = rowname, y = Overall),
     color="purple",
     fill="#69b3a2",
-    size=2
+    size=4
    )
 
 
@@ -378,7 +427,7 @@ varImp(model)$importance %>%
 ```
 ```{r}
 varImp(model)$importance %>% 
-   top_n(15, Overall) %>%
+   top_n(20, Overall) %>%
   as.data.frame() %>%
   tibble::rownames_to_column() %>%
   arrange(Overall) %>%
@@ -388,23 +437,26 @@ varImp(model)$importance %>%
     geom_col(aes(x = rowname, y = Overall),col="#E5F5F9" ,fill="#99D8C9")+
     coord_flip()+
     theme_bw()+
-    ggtitle("Most Important Features (top 15)")+
+    ggtitle("Most Important Features (top 20)")+
   theme(plot.title = element_text(hjust = 0.5))
     
 ```
 
 
-```{r}
-GGally::ggcorr(df, method = c("everything", "pearson"))#,ggplot2::aes(colour=deposit)) 
-```
+
 
 ```{r}
-corrplot(cor(dplyr::select_if(df, is.numeric)), method = 'number') # colorful number
+# corrplot(cor(dplyr::select_if(df, is.numeric)), method = 'circle',type='lower',addCoef.col = "black", diag = FALSE,col = hcl.colors(
+#                           n=10, 
+#                           alpha = 0.8
+#                           )) # colorful number
+
+corrplot(cor = cor(dplyr::select_if(df, is.numeric)),  addCoef.col = "black",method = "circle", type = "lower", order = "AOE",
+         diag = FALSE, number.cex = 0.7
+)
 ```
 
-```{r}
-GGally::ggcorr(df, columns=11:13,ggplot2::aes(colour=deposit)) 
-```
+
 
 
 ```{r}
@@ -448,11 +500,7 @@ ggplot(df, aes(campaign, fill = deposit)) +
 
 
 
-```{r}
-y<-inspect_cor(df[-16])#, show_plot = TRUE)
-show_plot(y)+
-  theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
-```
+
 
 
 ```{r}
@@ -472,10 +520,9 @@ ggplot(df, aes(pdays, fill = deposit)) +
 
 
 
-
-
-
-
+```{r}
+knitr::purl("model_with_visualizations.Rmd")
+```
 
 
 
