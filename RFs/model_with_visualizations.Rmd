@@ -5,6 +5,24 @@ output:
   pdf_document: default
 date: '2022-07-28'
 ---
+## ----setup, include=FALSE-------------------------------------
+knitr::opts_chunk$set(echo = TRUE)
+```{text}
+#Outline: 
+1. Do some preliminary visualizations 
+(already checked that there are no nas)
+
+2. Split into training, validation, and test set
+
+3. Fit a random forest, which performed better than gradient boosting
+
+4. Do visualizations for the features identified as important by
+  the random forest
+
+5. Present the results in a separate document
+
+```
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)

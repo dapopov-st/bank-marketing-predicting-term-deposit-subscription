@@ -1,20 +1,35 @@
-## ----setup, include=FALSE-------------------------------------
+## #Outline:
+
+## 1. Do some preliminary visualizations
+
+## (already checked that there are no nas)
+
+## 
+
+## 2. Split into training, validation, and test set
+
+## 
+
+## 3. Fit a random forest, which performed better than gradient boosting
+
+## 
+
+## 4. Do visualizations for the features identified as important by
+
+##   the random forest
+
+## 
+
+## 5. Present the results in a separate document
+
+## 
+
+
+## ----setup, include=FALSE--------------------------------------------------------------------------------
 knitr::opts_chunk$set(echo = TRUE)
 
-#Outline: 
-#1. Do some preliminary visualizations 
-#(already checked that there are no nas)
 
-#2. Split into training, validation, and test set
-
-#3. Fit a random forest, which performed better than boosted trees
-
-#4. Do visualizations for the features identified as important by
-# the random forest
-
-#5. Present the results in a separate document
-
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 library(dplyr)
 library(caret)
 library(inspectdf)
@@ -30,23 +45,23 @@ library(GGally)
 library(corrplot)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df = read.csv('../data/bank-additional-full.csv',sep = ';',stringsAsFactors=TRUE) #trying to override default behavior since need factors for SMOTE
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 dfK = read.csv('../data/bankKaggle.csv',sep = ',',stringsAsFactors=TRUE)
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 head(df)
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(duration, fill = y)) +
   geom_density(alpha = 0.5) +
   theme_bw()+
     ggtitle("Duration  Vs Deposits ")+
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, 
        aes(x = y, 
            y = duration),col('blue')) +
@@ -54,11 +69,11 @@ ggplot(df,
   labs(title = "Duration distribution by deposit response")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df %>% group_by(y) %>% summarise(avg=mean(duration),count=n(),total_hrs=mean(duration)*n()/3600,min_cost=total_hrs*8.08)#,count=n(duration))
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df$duration <- NULL
 #df$emp.var.rate <-NULL
 #df$cons.conf.idx <-NULL
@@ -67,69 +82,69 @@ df$duration <- NULL
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df<- df %>% rename(deposit = y)
 
 df$deposit=factor(df$deposit,levels=c('yes','no'))
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df%>%
   group_by(deposit)%>%
   summarize(cnt=n())
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df%>%
   group_by(deposit)%>%
   summarize(avg=mean(campaign))
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 dfK$duration <- NULL
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 head(dfK)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 x <- inspect_na(df)
 show_plot(x)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 x <- inspect_num(df)
 show_plot(x)
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 prop.table(table(df$y))
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 #reduced_general <-df %>%select(job,marital,education)
 telephone_type_vs_deposit <- df[,c(8,20)]
 mosaicplot(table(telephone_type_vs_deposit), shade = TRUE)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 #reduced_general <-df %>%select(job,marital,education)
 housing_vs_deposit <- df[,c(6,20)]
 mosaicplot(table(housing_vs_deposit), shade = TRUE)
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 #reduced_general <-df %>%select(job,marital,education)
 month_vs_deposit <- df[,c(9,20)]
 mosaicplot(table(month_vs_deposit ), shade = TRUE,color=TRUE)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 #reduced_general <-df %>%select(job,marital,education)
 housing_vs_deposit <- df[,c(6,20)]
 mosaicplot(table(housing_vs_deposit ), shade = TRUE,color=TRUE)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 df%>% 
   group_by(month,deposit)%>%
   summarise(cnt=n())%>%
@@ -137,7 +152,7 @@ df%>%
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 set.seed(42)
 trainIdx <- createDataPartition(df$deposit,p=0.8,list=FALSE)#90% for trainining, list = FALSE to avoid Error in xj[i] : invalid subscript type 'list'
 dfTrain <- df[trainIdx,]
@@ -152,7 +167,7 @@ dfValid <- validTest[-testIdx,]
 dfTest <- validTest[testIdx,]
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 #NOTE: I DON'T THINK I CAN MEANINGFULLY COMPARE THE MODEL FITTED ON 20 VARS WITH KAGGLE'S 17 ONE
 set.seed(42)
 trainIdxK <- createDataPartition(dfK$deposit,p=0.8,list=FALSE)#90% for trainining, list = FALSE to avoid Error in xj[i] : invalid subscript type 'list'
@@ -168,10 +183,11 @@ dfValidK <- validTestK[-testIdxK,]
 dfTestK <- validTestK[testIdxK,]
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 #Special thanks to Rodrigo Barrios for useful suggestions on imbalanced training with caret and ranger on a different dataset
 #https://www.kaggle.com/code/rowang/smote-for-imbalanced-dataset-notebook-r-caret/notebook
-#In my case, the simplest approach worked better than Smote
+#In my case, this approach worked better than Smote or gradient boosting. Finding the maximum ROC also
+#yielded better results than maximizing metrics such as F1 score, recall, sensitivity, or specificity.
 tuneGrid <- expand.grid(mtry = c(12,16), 
                         splitrule = c("extratrees"),
                         min.node.size = c(10,20,30,40))
@@ -199,7 +215,7 @@ model <- train(deposit ~ . ,
                                 importance = "impurity")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 pred_rf_raw_final <- predict.train(model,
                           newdata = dfValid,
                           type = "raw")
@@ -210,35 +226,36 @@ dfValid$pred_rf_raw_final<-pred_rf_raw_final
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 confusionMatrix(data = pred_rf_raw_final,
                 factor(dfValid$deposit),
                 positive = "yes")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 pred_rf_raw_test <- predict.train(model,
                           newdata = dfTest,
                           type = "raw")
-pred_rf_rec_test <- predict.train(model,
+pred_rf_prob_test <- predict.train(model,
                           newdata = dfTest,
                           type = "prob")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 confusionMatrix(data = pred_rf_raw_test,
                 factor(dfTest$deposit),
                 positive = "yes")
 
 
-## -------------------------------------------------------------
+
+## --------------------------------------------------------------------------------------------------------
 #Would be better to use the validation set for this, but the test set has a distribution of nos and yeses more similar to
 #training set
 predTest<-ifelse(pred_rf_raw_test=='yes',1,0)
 trueTest<-ifelse(dfTest$deposit=='yes',1,0)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 library(pROC)
 ## Type 'citation("pROC")' for a citation.
 ## 
@@ -262,32 +279,54 @@ plot(sens.ci, type="shape", col="lightblue")
 plot(sens.ci, type="bars")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 model
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 saveRDS(model, "model2.rds")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 exp2 <- readRDS("model2.rds")
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 print(exp2)
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
+joined=data.frame(as.numeric(unlist(pred_rf_prob_test[1])),pred_rf_raw_test,dfTest$deposit) #1 is col of yeses
+
+
+## --------------------------------------------------------------------------------------------------------
+joined<-joined %>% rename(probs=as.numeric.unlist.pred_rf_prob_test.1...,preds=pred_rf_raw_test,actual=dfTest.deposit)
+
+
+## --------------------------------------------------------------------------------------------------------
+#Would be better to use the validation set for this, but the test set has a distribution of nos and yeses more similar to
+#training set
+predExperiment<-ifelse(joined$probs>.30,1,0)
+trueExperiment<-ifelse(joined$actual=='yes',1,0)
+
+
+## --------------------------------------------------------------------------------------------------------
+confusionMatrix(data = factor(predExperiment),
+                factor(trueExperiment),
+                positive = '1')
+
+
+
+## --------------------------------------------------------------------------------------------------------
 caret::varImp(model)$importance
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 caret::varImp(model)$importance
 nrow(varImp(model)$importance) #34 variables extracted
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 varImp(model)$importance %>% 
   as.data.frame() %>%
   tibble::rownames_to_column() %>%
@@ -306,7 +345,7 @@ varImp(model)$importance %>%
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 varImp(model)$importance %>% 
   as.data.frame() %>%
   tibble::rownames_to_column() %>%
@@ -319,7 +358,7 @@ varImp(model)$importance %>%
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 varImp(model)$importance %>% 
    top_n(20, Overall) %>%
   as.data.frame() %>%
@@ -336,7 +375,7 @@ varImp(model)$importance %>%
     
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 # corrplot(cor(dplyr::select_if(df, is.numeric)), method = 'circle',type='lower',addCoef.col = "black", diag = FALSE,col = hcl.colors(
 #                           n=10, 
 #                           alpha = 0.8
@@ -347,7 +386,7 @@ corrplot(cor = cor(dplyr::select_if(df, is.numeric)),  addCoef.col = "black",met
 )
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 library(inspectdf)
 x<-inspectdf::inspect_cat(df)  
 show_plot(x)+
@@ -357,19 +396,19 @@ show_plot(x)+
 
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(age, fill = deposit)) +
   geom_density(alpha = 0.5) +
   theme_bw()
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(euribor3m, fill = deposit)) +
   geom_density(alpha = 0.5) +
   theme_bw()+
     ggtitle("Euribor 3 Month Rate  Vs Deposits ")+
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(pdays, fill = deposit)) +
   geom_density(alpha = 0.5) +
   theme_bw()+
@@ -377,7 +416,7 @@ ggplot(df, aes(pdays, fill = deposit)) +
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(campaign, fill = deposit)) +
   geom_density(alpha = 0.5) +
   theme_bw()+
@@ -385,14 +424,14 @@ ggplot(df, aes(campaign, fill = deposit)) +
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(nr.employed, fill = deposit)) +
   geom_density(alpha = 0.5) +
   theme_bw()+
     ggtitle("Number of Employees  Vs Deposits ")+
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 ggplot(df, aes(pdays, fill = deposit)) +
   geom_density(alpha = 0.5) +
   theme_bw()+
@@ -400,6 +439,6 @@ ggplot(df, aes(pdays, fill = deposit)) +
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
 
 
-## -------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------
 knitr::purl("model_with_visualizations.Rmd")
 
