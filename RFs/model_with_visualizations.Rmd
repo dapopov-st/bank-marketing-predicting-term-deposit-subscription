@@ -168,6 +168,11 @@ df%>%
 ================================================================================
 
 # Split into train, validation, and test sets
+Note that there is not clear time component here. In future analyses, it would be very helpful to try merging
+to a date using euribor3m rates in order to ensure that there is no data leakage in the randomly sampled 
+training, validation, and test sets.  This could be somewhat challenging, however, as there would be multiple
+dates that go with some euribor3m rates.  Ideally, one would have these dates prior to starting the analyses
+and use createTimeSlices to sample consequtive training, validation, and test sets.
 ```{r}
 set.seed(42)
 trainIdx <- createDataPartition(df$deposit,p=0.8,list=FALSE)#90% for trainining, list = FALSE to avoid Error in xj[i] : invalid subscript type 'list'
