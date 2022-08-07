@@ -362,7 +362,7 @@ exp2 <- readRDS("model2.rds")
 ```
 
 ```{r}
-print(exp2)
+write.csv(dfTest, "testing.csv")
 ```
 
 
@@ -539,6 +539,21 @@ ggplot(df, aes(pdays, fill = deposit)) +
   theme_bw()+
     ggtitle("Days after the client was contacted from a previous campaign (pdays)  Vs Deposits ")+
   theme(plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+```
+
+
+
+
+
+
+```{r}
+dfTest %>%
+  group_by(poutcome)%>%
+  summarise(n())
+  #unique(education)
+```
+```{r}
+unique(dfTest$education)
 ```
 
 
