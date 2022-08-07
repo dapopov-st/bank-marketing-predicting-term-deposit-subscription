@@ -1,3 +1,6 @@
+#Special thanks to the Data Science Professor for outlining this approach to
+#structuring an ML app in the video below
+#https://www.youtube.com/watch?v=ceg7MMQNln8&ab_channel=DataProfessor
 library(shiny)
 library(data.table)
 library(randomForest)
