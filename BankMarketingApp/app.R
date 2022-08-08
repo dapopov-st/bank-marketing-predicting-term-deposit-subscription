@@ -2,8 +2,11 @@
 #structuring an ML app in the video below
 #https://www.youtube.com/watch?v=ceg7MMQNln8&ab_channel=DataProfessor
 library(shiny)
+library(shinydashboard)
 library(data.table)
+library(ranger)
 library(randomForest)
+library(dplyr)
 library(caret)
 library(shinyWidgets)
 
@@ -37,81 +40,37 @@ ui <- pageWithSidebar(
                 min = min(TestSet$age),
                 max = max(TestSet$age)
     ),
-    sliderTextInput("job","Occupation" , 
+
+    selectInput("job","Occupation" , 
                     choices = c("admin.", "blue-collar", "entrepreneur", "housemaid","management","retired","self-employed","services","student","technician","unemployed","unknown"), 
-                                selected = c("admin."), #if you want any default values 
-                                animate = FALSE, grid = FALSE, 
-                                hide_min_max = FALSE, from_fixed = FALSE,
-                                to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                                to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                                post = NULL, dragRange = TRUE),
-    sliderTextInput("marital","Marital Status" , 
+                    selected = c("admin.")),
+    selectInput("marital","Marital Status" , 
                     choices = c("divorced", "single", "married", "unknown"), 
-                    selected = c("divorced"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
-    sliderTextInput("education","Education" , 
+                    selected = c("divorced")),
+    selectInput("education","Education" , 
                     choices = c("basic.4y", "basic.6y", "basic.9y", "high.school","illiterate","professional.course","university.degree","unknown"), 
-                    selected = c("basic.4y"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
-    sliderTextInput("default","Default" , 
+                    selected = c("basic.4y")),
+    selectInput("default","Default" , 
                     choices = c("no","unknown"), 
-                    selected = c("no"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
-    sliderTextInput("housing","Housing" , 
+                    selected = c("no")),
+    selectInput("housing","Housing" , 
                     choices = c("no","unknown","yes"), 
-                    selected = c("no"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
-    sliderTextInput("loan","Loan" , 
+                    selected = c("no")),
+    selectInput("loan","Loan" , 
                     choices = c("no","unknown","yes"), 
-                    selected = c("no"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
+                    selected = c("no")),
     HTML("<h3>Contact Attributes</h4>"),
-    sliderTextInput("contact","Contact (cell or tel.)" , 
+    selectInput("contact","Contact (cell or tel.)" , 
                     choices = c("cellular","telephone"), 
-                    selected = c("cellular"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
+                    selected = c("cellular")),
    
-    sliderTextInput("month","Month of contact" , 
+    selectInput("month","Month of contact" , 
                     choices = c("mar","apr","may","jun","jul","aug","sep","oct","nov","dec"), 
-                    selected = c("mar"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
+                    selected = c("mar")),
     
-    sliderTextInput("day_of_week","Day of Week" , 
+    selectInput("day_of_week","Day of Week" , 
                     choices = c("mon","tue","wed","thu","fri"), 
-                    selected = c("mon"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
+                    selected = c("mon")),
     HTML("<h3>Other Campaign Attributes</h4>"),
     sliderInput("campaign", label = "Number of previous contacts during campaing", value = 1,
                 min = min(TestSet$campaign),
@@ -125,14 +84,9 @@ ui <- pageWithSidebar(
                 min = min(TestSet$previous),
                 max = max(TestSet$previous)),
  
-    sliderTextInput("poutcome","Outcome of the previous campaign" , 
+    selectInput("poutcome","Outcome of the previous campaign" , 
                     choices = c("failure","nonexistent","success"), 
-                    selected = c("failure"), #if you want any default values 
-                    animate = FALSE, grid = FALSE, 
-                    hide_min_max = FALSE, from_fixed = FALSE,
-                    to_fixed = FALSE, from_min = NULL, from_max = NULL, to_min = NULL,
-                    to_max = NULL, force_edges = FALSE, width = NULL, pre = NULL,
-                    post = NULL, dragRange = TRUE),
+                    selected = c("failure")),
     HTML("<h3>Social and economic context attributes</h4>"),
     sliderInput("emp.var.rate", label = "Employment variation rate ", value = 1.4,
                 min = min(TestSet$emp.var.rate),
@@ -161,7 +115,9 @@ ui <- pageWithSidebar(
     ),
     tags$label(h1('Status/Output')), # Status/Output Text Box
     verbatimTextOutput('contents'),
-    tableOutput('tabledata') # Prediction results table
+    tableOutput('tabledata'), # Prediction results table
+    tags$label(h4('Conservative: Call if predicted probability of yes is above .5')),
+    tags$label(h4('Daring: Call if predicted probability of yes is above .3'))
     
   )
 )
